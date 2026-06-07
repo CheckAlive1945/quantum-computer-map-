@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Computing Map — Thamer Mohamed Sassi</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cyan:#00e5ff;--cyan-dim:rgba(0,229,255,0.13);--cyan-border:rgba(0,229,255,0.35);
+  --purple:#b06eff;--purple-dim:rgba(176,110,255,0.13);--purple-border:rgba(176,110,255,0.35);
+  --amber:#ffb830;--green:#00ff9d;
+  --bg:#03080f;--card:#0a1525;--card2:#0e1e35;
+  --text:#e8f4ff;--muted:#5a7a9a;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'Inter',sans-serif;color:var(--text);}
+
+/* ── STARFIELD ── */
+#stars{position:fixed;inset:0;pointer-events:none;z-index:0;}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--d) ease-in-out infinite alternate;opacity:0.35;}
+@keyframes twinkle{to{opacity:0.9;transform:scale(1.5);}}
+
+/* ── GRID LINES (like a map grid) ── */
+#grid{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,229,255,0.03) 1px,transparent 1px);
+  background-size:80px 80px;
+}
+
+/* ── TOP BAR ── */
+#topbar{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 28px;
+  background:linear-gradient(to bottom,rgba(3,8,15,0.97) 70%,transparent);
+  border-bottom:1px solid rgba(0,229,255,0.08);
+}
+#topbar .logo{font-family:'Orbitron',sans-serif;font-size:14px;color:var(--cyan);letter-spacing:3px;}
+#topbar .meta{font-size:12px;color:var(--muted);letter-spacing:1px;text-align:right;line-height:1.6;}
+#topbar .meta strong{color:var(--text);font-weight:500;}
+
+/* ── HINT ── */
+#hint{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:100;
+  font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;color:var(--muted);
+  background:rgba(3,8,15,0.85);border:1px solid rgba(0,229,255,0.12);
+  padding:8px 20px;border-radius:20px;
+  animation:fadehint 6s ease forwards;
+}
+@keyframes fadehint{0%{opacity:1}70%{opacity:1}100%{opacity:0;pointer-events:none}}
+
+/* ── ZOOM CONTROLS ── */
+#zoom-controls{
+  position:fixed;bottom:24px;right:24px;z-index:100;
+  display:flex;flex-direction:column;gap:6px;
+}
+.zoom-btn{
+  width:36px;height:36px;border-radius:8px;
+  border:1px solid var(--cyan-border);background:rgba(3,8,15,0.9);
+  color:var(--cyan);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Orbitron',sans-serif;
+  transition:background 0.2s;
+}
+.zoom-btn:hover{background:var(--cyan-dim);}
+
+/* ── MINI MAP ── */
+#minimap{
+  position:fixed;bottom:24px;left:24px;z-index:100;
+  width:140px;height:90px;
+  background:rgba(3,8,15,0.9);
+  border:1px solid var(--cyan-border);
+  border-radius:10px;overflow:hidden;
+}
+#minimap-viewport{
+  position:absolute;
+  border:1px solid var(--cyan);
+  background:rgba(0,229,255,0.07);
+  pointer-events:none;
+  transition:all 0.1s;
+}
+.mini-dot{
+  position:absolute;
+  border-radius:50%;
+  background:var(--cyan);
+  opacity:0.5;
+  width:4px;height:4px;
+  transform:translate(-50%,-50%);
+}
+
+/* ── MAP CANVAS ── */
+#map-container{
+  position:fixed;inset:0;z-index:1;
+  overflow:hidden;cursor:grab;
+  touch-action:none;
+}
+#map-container:active{cursor:grabbing;}
+#map-world{
+  position:absolute;
+  transform-origin:0 0;
+  will-change:transform;
+}
+
+/* ── NODE CARDS ── */
+.node{
+  position:absolute;
+  transform:translate(-50%,-50%);
+  cursor:pointer;
+  transition:filter 0.25s;
+}
+.node:hover .node-card{
+  border-color:var(--cyan);
+  box-shadow:0 0 28px rgba(0,229,255,0.25),0 0 0 1px rgba(0,229,255,0.15);
+  transform:scale(1.04);
+}
+.node-card{
+  background:var(--card);
+  border:1px solid rgba(0,229,255,0.2);
+  border-radius:14px;
+  padding:14px 16px;
+  width:200px;
+  transition:all 0.25s;
+  position:relative;
+  overflow:hidden;
+}
+.node-card::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple));
+}
+.node-card.purple::before{background:linear-gradient(90deg,var(--purple),var(--cyan));}
+.node-card.amber::before{background:linear-gradient(90deg,var(--amber),#ff6b35);}
+.node-card.green::before{background:linear-gradient(90deg,var(--green),var(--cyan));}
+
+.node-type{
+  font-family:'Orbitron',sans-serif;
+  font-size:8px;letter-spacing:2px;color:var(--muted);
+  margin-bottom:6px;text-transform:uppercase;
+}
+.node-title{
+  font-family:'Orbitron',sans-serif;
+  font-size:11px;font-weight:700;color:#fff;
+  line-height:1.35;margin-bottom:6px;
+}
+.node-body{
+  font-size:11px;color:var(--muted);line-height:1.55;
+}
+.node-img{
+  width:100%;border-radius:8px;margin-top:10px;
+  aspect-ratio:16/9;object-fit:cover;opacity:0.85;
+  background:var(--card2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;
+}
+.node-img img{width:100%;height:100%;object-fit:cover;border-radius:8px;display:block;}
+
+/* HUB node (large) */
+.node-card.hub{
+  width:240px;padding:18px 20px;
+  border-color:rgba(0,229,255,0.4);
+  box-shadow:0 0 30px rgba(0,229,255,0.1);
+}
+.node-card.hub .node-title{font-size:13px;}
+
+/* section header node */
+.node-card.section-node{
+  width:180px;text-align:center;
+  background:rgba(0,229,255,0.05);
+  border-color:rgba(0,229,255,0.3);
+}
+.node-card.section-node .node-title{font-size:12px;color:var(--cyan);}
+
+/* connector lines */
+#connections{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
+
+/* ── DETAIL PANEL ── */
+#detail{
+  position:fixed;top:60px;right:0;bottom:0;
+  width:380px;z-index:200;
+  background:rgba(5,12,22,0.97);
+  border-left:1px solid var(--cyan-border);
+  transform:translateX(100%);
+  transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);
+  overflow-y:auto;
+  padding:28px 28px 80px;
+}
+#detail.open{transform:translateX(0);}
+#detail-close{
+  position:absolute;top:16px;right:16px;
+  width:32px;height:32px;border-radius:50%;
+  border:1px solid var(--cyan-border);background:var(--cyan-dim);
+  color:var(--cyan);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+#detail-type{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:3px;color:var(--cyan);margin-bottom:10px;}
+#detail-title{font-family:'Orbitron',sans-serif;font-size:20px;color:#fff;line-height:1.3;margin-bottom:14px;}
+#detail-img{width:100%;border-radius:12px;margin-bottom:18px;aspect-ratio:16/9;object-fit:cover;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:48px;}
+#detail-img img{width:100%;height:100%;object-fit:cover;border-radius:12px;}
+#detail-body{font-size:14px;color:var(--muted);line-height:1.75;}
+#detail-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+.tag{padding:5px 12px;border-radius:20px;font-size:11px;border:1px solid var(--cyan-border);color:var(--cyan);background:var(--cyan-dim);}
+.tag.purple{border-color:var(--purple-border);color:var(--purple);background:var(--purple-dim);}
+#detail-nav{display:flex;gap:10px;margin-top:24px;}
+.dnav-btn{flex:1;padding:10px;border-radius:8px;border:1px solid var(--cyan-border);background:var(--cyan-dim);color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;transition:background 0.2s;}
+.dnav-btn:hover{background:rgba(0,229,255,0.25);}
+
+/* ── LEGEND ── */
+#legend{
+  position:fixed;top:70px;left:16px;z-index:100;
+  background:rgba(3,8,15,0.9);border:1px solid rgba(0,229,255,0.1);
+  border-radius:10px;padding:12px 16px;font-size:11px;
+}
+#legend h4{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}
+.leg-item{display:flex;align-items:center;gap:8px;margin-bottom:5px;color:var(--muted);}
+.leg-dot{width:10px;height:10px;border-radius:50%;}
+</style>
+</head>
+<body>
+<div id="stars"></div>
+<div id="grid"></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">⚛ QUANTUM COMPUTING — CS MAP</div>
+  <div class="meta">
+    <strong>Thamer Mohamed Sassi</strong> · AI Group 3 · First Year<br>
+    Dept. of Computer Science · UVT · 2025–2026
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div id="legend">
+  <h4>Map Legend</h4>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--cyan)"></div>Activities & Core Concepts</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--purple)"></div>History, People & CS Connections</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--amber)"></div>Venues & Local (UVT)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Problems & Global Dimension</div>
+</div>
+
+<!-- MAP -->
+<div id="map-container">
+  <div id="map-world">
+    <svg id="connections"></svg>
+    <!-- Nodes injected by JS -->
+  </div>
+</div>
+
+<!-- MINI MAP -->
+<div id="minimap"><div id="minimap-viewport"></div></div>
+
+<!-- ZOOM CONTROLS -->
+<div id="zoom-controls">
+  <button class="zoom-btn" onclick="zoomBy(1.25)">+</button>
+  <button class="zoom-btn" onclick="zoomBy(0.8)">−</button>
+  <button class="zoom-btn" onclick="resetView()" title="Reset" style="font-size:13px;letter-spacing:0">⌂</button>
+</div>
+
+<!-- HINT -->
+<div id="hint">🖱 DRAG TO EXPLORE · SCROLL TO ZOOM · CLICK NODES TO INSPECT</div>
+
+<!-- DETAIL PANEL -->
+<div id="detail">
+  <div id="detail-close" onclick="closeDetail()">✕</div>
+  <div id="detail-type"></div>
+  <div id="detail-title"></div>
+  <div id="detail-img"></div>
+  <div id="detail-body"></div>
+  <div id="detail-tags"></div>
+  <div id="detail-nav">
+    <button class="dnav-btn" id="dnav-prev" onclick="detailNav(-1)">← PREV NODE</button>
+    <button class="dnav-btn" id="dnav-next" onclick="detailNav(1)">NEXT NODE →</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// MAP DATA — Activity-compliant multilevel map
+// Covers: activities, connections to other CS areas,
+// problems & open problems, people, venues,
+// local (UVT) and global dimensions
+// ════════════════════════════════════════════
+const nodes = [
+
+  // ── HUB ──
+  {
+    id:'cover', x:1100, y:700,
+    type:'OVERVIEW', color:'cyan', size:'hub',
+    title:'Quantum Computing — CS Map',
+    body:'A multilevel map of Quantum Computing as a CS discipline. Covers main activities (theory, experiment, design), connections to other CS areas, important problems, open problems, key people, venues, and both local (UVT) and global dimensions.',
+    emoji:'⚛',
+    tags:['Quantum Computing','Computer Science','UVT','Activity 1'],
+    img:'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&q=80'
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 1 — MAIN ACTIVITIES
+  // ══════════════════════════════════════════
+  {
+    id:'act-section', x:400, y:420,
+    type:'SECTION', color:'cyan', size:'section',
+    title:'Main Activities',
+    body:'Theory · Experiment · Design',
+    emoji:'⚙️', tags:[]
+  },
+  {
+    id:'theory', x:200, y:280,
+    type:'ACTIVITY — THEORY', color:'cyan',
+    title:'Theory',
+    body:'The theoretical pillar of quantum computing. Involves formal models (quantum Turing machines, quantum circuits), complexity theory (BQP, QMA complexity classes), algorithm design (Shor, Grover, HHL), and quantum information theory (entropy, channel capacity). Theory asks: what problems can quantum computers solve faster, and why?',
+    emoji:'📐',
+    tags:['BQP','Complexity','Algorithms','Quantum Circuits']
+  },
+  {
+    id:'experiment', x:400, y:200,
+    type:'ACTIVITY — EXPERIMENT', color:'cyan',
+    title:'Experiment',
+    body:'Experimental quantum computing involves building and testing actual quantum hardware. Platforms include superconducting qubits (IBM, Google), trapped ions (IonQ, Honeywell), photonic qubits, and topological qubits (Microsoft). Experiments measure coherence times, gate fidelities, and error rates — bridging physical theory with computation.',
+    emoji:'🧪',
+    tags:['Superconducting','Trapped Ions','Coherence','Gate Fidelity']
+  },
+  {
+    id:'design', x:600, y:250,
+    type:'ACTIVITY — DESIGN', color:'cyan',
+    title:'Design',
+    body:'Design in quantum computing encompasses quantum algorithm engineering, quantum circuit optimization, quantum error correction code design (surface codes, stabilizer codes), and software stack architecture (Qiskit, Cirq, PennyLane). It bridges theory and practice, turning mathematical ideas into executable quantum programs.',
+    emoji:'🔧',
+    tags:['Circuit Design','Error Correction','Qiskit','Software Stack']
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 2 — CORE CONCEPTS
+  // ══════════════════════════════════════════
+  {
+    id:'concepts-section', x:700, y:420,
+    type:'SECTION', color:'cyan', size:'section',
+    title:'Core Concepts',
+    body:'Foundational ideas of quantum computation.',
+    emoji:'🔮', tags:[]
+  },
+  {
+    id:'concepts', x:700, y:580,
+    type:'KEY CONCEPTS', color:'cyan',
+    title:'Key Concepts of Quantum Processes',
+    body:'The four pillars: Qubits (quantum bits existing as 0, 1, or superposition), Superposition (multiple states simultaneously), Entanglement (instant correlation between qubits regardless of distance), and Quantum Interference (amplifying correct paths, canceling wrong ones).',
+    emoji:'🔮',
+    tags:['Qubits','Superposition','Entanglement','Interference'],
+  },
+  {
+    id:'basics', x:500, y:580,
+    type:'CORE CONCEPT', color:'cyan',
+    title:'Classical vs. Quantum Computing',
+    body:'Classical computers use bits (0/1) and logic gates. Quantum computers use qubits and quantum gates (Hadamard, CNOT, Toffoli). Classical is deterministic; quantum is probabilistic with measurement collapse. For most everyday tasks classical is superior — quantum advantage applies to specific problem classes.',
+    emoji:'⚙️',
+    tags:['Binary','Qubits','Gates','Quantum Advantage'],
+    img:'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&q=80'
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 3 — CONNECTIONS TO OTHER CS AREAS
+  // ══════════════════════════════════════════
+  {
+    id:'connections-section', x:1550, y:300,
+    type:'SECTION', color:'purple', size:'section',
+    title:'Connections to Other CS Areas',
+    body:'Dependencies & influences on the broader CS landscape.',
+    emoji:'🔗', tags:[]
+  },
+  {
+    id:'conn-crypto', x:1780, y:160,
+    type:'CS CONNECTION', color:'purple',
+    title:'↔ Cryptography',
+    body:"Strong bidirectional influence. Quantum computers threaten classical cryptography (RSA, ECC) via Shor's algorithm, breaking them in polynomial time. This drives Post-Quantum Cryptography (NIST PQC standards: CRYSTALS-Kyber, CRYSTALS-Dilithium). Quantum Key Distribution (BB84 protocol) offers theoretically unbreakable encryption.",
+    emoji:'🔐',
+    tags:["Shor's","RSA broken","Post-Quantum","QKD","NIST PQC"]
+  },
+  {
+    id:'conn-ai', x:1950, y:300,
+    type:'CS CONNECTION', color:'purple',
+    title:'↔ Artificial Intelligence / ML',
+    body:'Quantum Machine Learning (QML) explores using quantum circuits as models. Variational Quantum Eigensolvers (VQE) are used in hybrid quantum-classical optimization. Quantum speedups for linear algebra (HHL algorithm) could accelerate ML tasks. Influence: AI inspires quantum neural network architectures; quantum may one day accelerate training.',
+    emoji:'🤖',
+    tags:['QML','VQE','HHL','Quantum Neural Networks']
+  },
+  {
+    id:'conn-complexity', x:1820, y:460,
+    type:'CS CONNECTION', color:'purple',
+    title:'↔ Complexity Theory',
+    body:'Quantum computing reshapes complexity theory. BQP (Bounded-error Quantum Polynomial time) is the quantum analog of P. Key open question: does BQP = P, BQP ⊆ NP, or BQP ≠ NP? Quantum computing likely cannot solve all NP problems. QMA is the quantum analog of NP — quantum proofs of hard problems.',
+    emoji:'🧮',
+    tags:['BQP','QMA','P vs NP','Complexity Classes']
+  },
+  {
+    id:'conn-physics', x:1660, y:420,
+    type:'CS CONNECTION', color:'purple',
+    title:'↔ Physics / Quantum Mechanics',
+    body:'Quantum computing is deeply rooted in quantum mechanics — the physics of particles at the atomic scale. Dependency: all quantum hardware relies on superposition, entanglement, and decoherence physics. Quantum error correction borrows from condensed matter physics (topological qubits). Cross-pollination is essential: physicists and CS theorists collaborate directly.',
+    emoji:'⚛',
+    tags:['Quantum Mechanics','Decoherence','Topological','Condensed Matter']
+  },
+  {
+    id:'conn-hpc', x:1680, y:560,
+    type:'CS CONNECTION', color:'purple',
+    title:'↔ High-Performance Computing',
+    body:'Near-term hybrid classical-quantum systems require tight integration with HPC infrastructure. Quantum simulators (classical supercomputers simulating quantum systems) validate quantum hardware. Influence: HPC scheduling, noise models, and compiler techniques are adapted for quantum backends. ORNL, Argonne, and Jülich operate quantum-HPC hybrid systems.',
+    emoji:'🖥',
+    tags:['Hybrid Quantum-Classical','Simulation','HPC','ORNL']
+  },
+  {
+    id:'conn-optimization', x:1960, y:500,
+    type:'CS CONNECTION', color:'purple',
+    title:'↔ Optimization & Operations Research',
+    body:'Quantum Approximate Optimization Algorithm (QAOA) targets combinatorial optimization — scheduling, logistics, portfolio optimization. Quantum Annealing (D-Wave) is specifically designed for optimization problems. Influence goes both ways: OR techniques inspire quantum circuit design; quantum may eventually outperform classical heuristics for NP-hard problems.',
+    emoji:'📊',
+    tags:['QAOA','Quantum Annealing','D-Wave','Combinatorial']
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 4 — IMPORTANT PROBLEMS & OPEN PROBLEMS
+  // ══════════════════════════════════════════
+  {
+    id:'problems-section', x:400, y:960,
+    type:'SECTION', color:'green', size:'section',
+    title:'Problems & Open Problems',
+    body:'Known challenges and unsolved frontiers.',
+    emoji:'❓', tags:[]
+  },
+  {
+    id:'prob-decoherence', x:200, y:1100,
+    type:'KNOWN PROBLEM', color:'green',
+    title:'Qubit Decoherence',
+    body:"Qubits lose their quantum state (decohere) when disturbed by the environment. Intuition: imagine a soap bubble — any vibration pops it. Current superconducting qubits maintain coherence for ~100 microseconds — far too short for complex algorithms. Solutions: better isolation, cryogenic cooling (15 millikelvin), and error correction codes (surface codes).",
+    emoji:'💨',
+    tags:['Decoherence','Coherence Time','Error Correction','Surface Codes']
+  },
+  {
+    id:'prob-errorcorr', x:400, y:1120,
+    type:'KNOWN PROBLEM', color:'green',
+    title:'Quantum Error Correction',
+    body:'Quantum gates are imperfect and measurement collapses quantum states. Error correction requires encoding one logical qubit into many physical qubits (1 logical ≈ 1000 physical for surface codes). Intuition: like storing a book in 1000 copies — even if some are damaged, the original can be recovered. This overhead is a central scaling challenge.',
+    emoji:'🛡',
+    tags:['Surface Code','Logical Qubit','Physical Qubit','Fault Tolerance']
+  },
+  {
+    id:'prob-scalability', x:600, y:1080,
+    type:'KNOWN PROBLEM', color:'green',
+    title:'Scalability',
+    body:"Today's quantum computers have hundreds to thousands of noisy physical qubits. Fault-tolerant computation may require millions. Wiring, cooling, and control electronics don't scale easily. Intuition: imagine adding 1 million microphones to a single refrigerator without warming it or creating electrical interference.",
+    emoji:'📈',
+    tags:['NISQ','Fault-Tolerant','Qubit Count','Engineering']
+  },
+  {
+    id:'prob-bqp', x:200, y:1280,
+    type:'OPEN PROBLEM', color:'green',
+    title:'Open: Is BQP ⊆ NP?',
+    body:"Can quantum computers solve NP-complete problems efficiently? It is widely believed the answer is NO — quantum doesn't solve everything harder problems. Intuition: a quantum computer can search a database of N items in √N steps (Grover), but NP-complete problems likely still require exponential time. Formally: BQP vs. NP is an open problem in complexity theory.",
+    emoji:'🧩',
+    tags:['BQP','NP','Complexity','Open Problem']
+  },
+  {
+    id:'prob-supremacy', x:420, y:1300,
+    type:'OPEN PROBLEM', color:'green',
+    title:'Open: Quantum Advantage in Practice',
+    body:'Google claimed "quantum supremacy" in 2019 for a sampling task. But IBM challenged this, arguing classical computers could solve it in 2.5 days. Open question: can quantum computers demonstrate a clear, verifiable, and practically useful advantage over classical machines in real-world tasks (not contrived sampling experiments)?',
+    emoji:'🏆',
+    tags:['Quantum Supremacy','Advantage','Google','IBM','Open Problem']
+  },
+  {
+    id:'prob-simulation', x:620, y:1260,
+    type:'OPEN PROBLEM', color:'green',
+    title:'Open: Quantum Chemistry Simulation',
+    body:'Simulating large molecules accurately is exponentially hard classically but tractable on quantum hardware. Open problem: can quantum computers simulate molecules like FeMoCo (nitrogenase enzyme) to unlock industrial nitrogen fixation? This could revolutionize fertilizer production and reduce CO₂ emissions — but requires fault-tolerant machines we don\'t yet have.',
+    emoji:'🧬',
+    tags:['Quantum Chemistry','FeMoCo','Drug Discovery','Open Problem']
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 5 — IMPORTANT PEOPLE
+  // ══════════════════════════════════════════
+  {
+    id:'people-section', x:1550, y:700,
+    type:'SECTION', color:'purple', size:'section',
+    title:'Important People',
+    body:'Global pioneers and contemporary leaders.',
+    emoji:'👥', tags:[]
+  },
+  {
+    id:'feynman', x:1350, y:840,
+    type:'PIONEER', color:'purple',
+    title:'Richard Feynman (1918–1988)',
+    body:'Nobel Prize-winning physicist who in 1981 proposed that quantum systems could only be efficiently simulated by quantum computers — the visionary idea that sparked the entire field. His Caltech lecture "Simulating Physics with Computers" remains foundational reading.',
+    emoji:'🧪',tags:['Quantum Simulation','1981','Nobel Prize','Caltech']
+  },
+  {
+    id:'deutsch', x:1500, y:880,
+    type:'PIONEER', color:'purple',
+    title:'David Deutsch (b. 1953)',
+    body:'Oxford physicist who in 1985 proposed the quantum Turing machine — the theoretical foundation of quantum computation. He showed quantum computers can perform any computation a classical computer can, plus more. Pioneer of the Many-Worlds interpretation of quantum mechanics.',
+    emoji:'🔧',tags:['Quantum Turing Machine','1985','Oxford','Many-Worlds']
+  },
+  {
+    id:'shor', x:1660, y:820,
+    type:'PIONEER', color:'purple',
+    title:'Peter Shor (b. 1959)',
+    body:"MIT professor who in 1994 developed Shor's algorithm for integer factoring in polynomial quantum time — threatening RSA encryption. This single result ignited the global quantum computing race and government-level investment. Also contributed quantum error correction theory.",
+    emoji:'📐',tags:["Shor's Algorithm",'MIT','Cryptography','1994']
+  },
+  {
+    id:'grover', x:1820, y:840,
+    type:'PIONEER', color:'purple',
+    title:'Lov Grover (b. 1961)',
+    body:"Bell Labs researcher who in 1996 developed Grover's algorithm — quantum search with quadratic speedup. Searching N items takes √N quantum steps vs. N classical steps. Proved to be optimal for unstructured search; used in cryptanalysis and optimization.",
+    emoji:'🔍',tags:["Grover's Algorithm",'Bell Labs','Search','1996']
+  },
+  {
+    id:'preskill', x:1960, y:800,
+    type:'PIONEER', color:'purple',
+    title:'John Preskill (b. 1953)',
+    body:'Caltech physicist who coined "quantum supremacy" (2012) and "NISQ" (Noisy Intermediate-Scale Quantum, 2018). Directs IQIM. Leading authority on quantum error correction and fault tolerance. His open-source lecture notes on quantum computing (Preskill notes) are used worldwide.',
+    emoji:'🏅',tags:['Quantum Supremacy','NISQ','Caltech','IQIM','Error Correction']
+  },
+  {
+    id:'bennett', x:1680, y:960,
+    type:'PIONEER', color:'purple',
+    title:'Charles Bennett (b. 1943)',
+    body:'IBM researcher who co-invented quantum cryptography (BB84, 1984), quantum teleportation, and quantum entanglement purification. Fundamental contributor to quantum information theory and reversible computing. Fellow of the American Physical Society.',
+    emoji:'🔐',tags:['BB84','Quantum Cryptography','Teleportation','IBM']
+  },
+  {
+    id:'harrow', x:1840, y:960,
+    type:'RESEARCHER', color:'purple',
+    title:'Aram Harrow (b. 1980)',
+    body:'MIT professor and co-inventor of the HHL algorithm (Harrow-Hassidim-Lloyd, 2009) for solving linear systems of equations exponentially faster on quantum hardware. Key figure connecting quantum computing with machine learning and scientific computing.',
+    emoji:'🧮',tags:['HHL Algorithm','MIT','Linear Systems','QML']
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 6 — VENUES (Journals & Conferences)
+  // ══════════════════════════════════════════
+  {
+    id:'venues-section', x:900, y:1060,
+    type:'SECTION', color:'amber', size:'section',
+    title:'Important Venues',
+    body:'Journals, conferences, and workshops.',
+    emoji:'📰', tags:[]
+  },
+  {
+    id:'journal-nature', x:700, y:1200,
+    type:'JOURNAL', color:'amber',
+    title:'Nature / Nature Physics',
+    body:'The world\'s most prestigious interdisciplinary science journal. Quantum computing breakthroughs — Google\'s quantum supremacy claim (2019), IBM\'s error correction milestones — are published here. Impact factor ~69. Peer-reviewed, extremely competitive. Essential reading for major quantum hardware advances.',
+    emoji:'📗',
+    tags:['Nature','High Impact','Google Supremacy','Peer-Reviewed']
+  },
+  {
+    id:'journal-prx', x:840, y:1240,
+    type:'JOURNAL', color:'amber',
+    title:'PRX Quantum (APS)',
+    body:'American Physical Society\'s dedicated quantum information journal, launched 2020. Covers quantum computing, quantum communication, and quantum sensing. Open-access and rapidly growing as the field\'s dedicated venue. Essential for algorithm and hardware papers.',
+    emoji:'📘',
+    tags:['PRX Quantum','APS','Open Access','Algorithms']
+  },
+  {
+    id:'journal-quantum', x:980, y:1200,
+    type:'JOURNAL', color:'amber',
+    title:'Quantum (Verein)',
+    body:'Community-driven open-access journal for quantum science and technology, founded 2017. Known for rigorous peer review and fast publication. Frequently publishes complexity theory, quantum algorithms, and information theory results. Free to publish and read.',
+    emoji:'📙',
+    tags:['Quantum Journal','Open Access','Community','Fast Review']
+  },
+  {
+    id:'conf-qip', x:700, y:1380,
+    type:'CONFERENCE', color:'amber',
+    title:'QIP — Quantum Information Processing',
+    body:'The premier annual conference in quantum computation and information. Brings together theorists worldwide for plenary talks, contributed talks, and posters. Highly selective (~15% acceptance). QIP 2024 was held in Taipei; QIP 2025 in Ghent, Belgium. Essential for cutting-edge theory.',
+    emoji:'🎯',
+    tags:['QIP','Theory','Annual','Top Conference']
+  },
+  {
+    id:'conf-ieee-quantum', x:860, y:1420,
+    type:'CONFERENCE', color:'amber',
+    title:'IEEE Quantum Week',
+    body:'The IEEE International Conference on Quantum Computing and Engineering (QCE). Launched 2020, held annually in the USA. Broader scope than QIP — covers quantum hardware, software, error correction, and industry applications. IEEE Quantum is the parent society. Strong industry-academia bridge.',
+    emoji:'🔌',
+    tags:['IEEE','Quantum Week','QCE','Industry','Engineering']
+  },
+  {
+    id:'conf-stoc', x:1000, y:1380,
+    type:'CONFERENCE', color:'amber',
+    title:'STOC / FOCS',
+    body:'The ACM Symposium on Theory of Computing (STOC) and IEEE FOCS (Foundations of Computer Science) are the top theoretical CS conferences. Major quantum complexity and algorithm results (BQP lower bounds, new quantum algorithms) are published here — bridging quantum computing with mainstream CS theory.',
+    emoji:'🧠',
+    tags:['STOC','FOCS','Complexity Theory','ACM','IEEE']
+  },
+  {
+    id:'conf-isca', x:1120, y:1280,
+    type:'CONFERENCE', color:'amber',
+    title:'MICRO / ISCA / ASPLOS',
+    body:'Top computer architecture conferences that increasingly feature quantum computer architecture tracks. Quantum memory hierarchies, compilation, noise mitigation, and quantum-classical co-design are published here. Signals growing integration of quantum into mainstream systems research.',
+    emoji:'🖥',
+    tags:['MICRO','ISCA','ASPLOS','Architecture','Compilation']
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 7 — LOCAL DIMENSION (UVT)
+  // ══════════════════════════════════════════
+  {
+    id:'local-section', x:200, y:700,
+    type:'SECTION', color:'amber', size:'section',
+    title:'Local Dimension — UVT',
+    body:'Dept. of Computer Science @ Universitatea de Vest din Timișoara.',
+    emoji:'🏛', tags:[]
+  },
+  {
+    id:'uvt-overview', x:100, y:860,
+    type:'LOCAL — UVT', color:'amber',
+    title:'UVT — Dept. of Computer Science',
+    body:'The Department of Computer Science at Universitatea de Vest din Timișoara (UVT) offers BSc and MSc programs in Computer Science and AI. Located in Timișoara, 2023 European Capital of Culture. The department is part of the Faculty of Mathematics and Informatics and maintains active research groups.',
+    emoji:'🏛',
+    tags:['UVT','Timișoara','BSc','MSc','Faculty of Math & Informatics']
+  },
+  {
+    id:'uvt-courses', x:260, y:900,
+    type:'LOCAL — UVT COURSES', color:'amber',
+    title:'Relevant Courses at UVT',
+    body:'Courses at UVT relevant to Quantum Computing: Algorithms & Data Structures (complexity foundations), Introduction to Computer Science (Denning framework), Formal Languages & Automata (computational models), Mathematical Logic (quantum circuit verification), Computer Architecture (classical hardware understanding), and AI (connections to QML).',
+    emoji:'📚',
+    tags:['Algorithms','Formal Languages','AI','UVT Curriculum','Math Logic']
+  },
+  {
+    id:'uvt-research', x:100, y:1040,
+    type:'LOCAL — RESEARCH', color:'amber',
+    title:'Research at UVT',
+    body:'UVT hosts research in theoretical computer science, AI, and formal methods. The CS department collaborates with national and European research networks. Student research can connect to quantum themes through complexity theory, optimization, and formal verification — foundational tools for quantum algorithm correctness.',
+    emoji:'🔬',
+    tags:['Research','Formal Methods','Complexity','AI','European Networks']
+  },
+  {
+    id:'uvt-collab', x:300, y:1040,
+    type:'LOCAL — COLLABORATION', color:'amber',
+    title:'Cross-Area Collaboration at UVT',
+    body:'This map can be connected with classmates exploring related CS areas (Cryptography, AI, HPC, Algorithms). Quantum Computing intersects with all of them. Classmates mapping Cryptography will find Post-Quantum Cryptography as a direct bridge. AI students share QML. Algorithm students share complexity and quantum speedups.',
+    emoji:'🤝',
+    tags:['Map Activity','Peer Collaboration','Cryptography','AI','HPC']
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 8 — GLOBAL DIMENSION
+  // ══════════════════════════════════════════
+  {
+    id:'global-section', x:1550, y:1060,
+    type:'SECTION', color:'green', size:'section',
+    title:'Global Dimension',
+    body:'World-leading research institutions and industry players.',
+    emoji:'🌍', tags:[]
+  },
+  {
+    id:'ibm', x:1380, y:1200,
+    type:'INDUSTRY · IBM', color:'green',
+    title:'IBM Quantum',
+    body:'IBM Quantum leads in cloud-accessible quantum computing via the IBM Quantum Network and Qiskit SDK. IBM Eagle (127 qubits, 2021), Osprey (433, 2022), Condor (1121, 2023), Heron (2024). Roadmap targets fault-tolerant quantum computers by 2033. Open-source ecosystem with 550K+ registered Qiskit users globally.',
+    emoji:'🔵',
+    tags:['IBM','Qiskit','Cloud Quantum','Condor','Fault Tolerance'],
+  },
+  {
+    id:'google', x:1560, y:1240,
+    type:'INDUSTRY · GOOGLE', color:'green',
+    title:'Google Quantum AI',
+    body:'Google Quantum AI achieved "quantum supremacy" with Sycamore (53 qubits, 2019). Unveiled Willow chip (2024) demonstrating exponential error reduction as qubit count scales — a landmark in quantum error correction. Cirq is Google\'s open-source quantum framework. Research HQ in Santa Barbara, CA.',
+    emoji:'🟢',
+    tags:['Google','Quantum Supremacy','Sycamore','Willow','Cirq'],
+  },
+  {
+    id:'ionq', x:1720, y:1200,
+    type:'INDUSTRY · IONQ', color:'green',
+    title:'IonQ — Trapped Ion',
+    body:'IonQ is a leading quantum computing company using trapped ion technology. Ions (charged ytterbium atoms) act as qubits, controlled by laser pulses. Trapped ions have higher fidelity than superconducting qubits and operate at room temperature (trap itself is not cryogenic). Publicly traded (NYSE: IONQ) since 2021.',
+    emoji:'⚡',
+    tags:['Trapped Ion','IonQ','Ytterbium','High Fidelity','NYSE']
+  },
+  {
+    id:'microsoft', x:1860, y:1160,
+    type:'INDUSTRY · MICROSOFT', color:'green',
+    title:'Microsoft — Topological Qubits',
+    body:'Microsoft Quantum bets on topological qubits using Majorana fermions — theoretically highly resistant to decoherence. Announced a topological qubit chip breakthrough in 2025 (Nature paper). Azure Quantum provides cloud access to partner hardware. Q# is Microsoft\'s quantum programming language.',
+    emoji:'🔷',
+    tags:['Topological Qubits','Majorana','Azure Quantum','Q#','Microsoft']
+  },
+  {
+    id:'mit', x:1380, y:1380,
+    type:'ACADEMIA · GLOBAL', color:'green',
+    title:'MIT — Center for Quantum Engineering',
+    body:'MIT\'s Center for Quantum Engineering (CQE) spans physics, EECS, and chemistry. Home to key researchers: Peter Shor, Aram Harrow, William Oliver (superconducting hardware). MIT-IBM Watson AI Lab bridges industry and academia. MIT OpenCourseWare includes quantum computing materials freely accessible worldwide.',
+    emoji:'🎓',
+    tags:['MIT','CQE','Peter Shor','Aram Harrow','Education']
+  },
+  {
+    id:'caltech', x:1560, y:1400,
+    type:'ACADEMIA · GLOBAL', color:'green',
+    title:'Caltech — IQIM',
+    body:'The Institute for Quantum Information and Matter (IQIM) at Caltech, led by John Preskill, is one of the world\'s premier quantum research centers. Home to seminal work in quantum error correction, quantum field theory connections, and quantum gravity. Operates the AWS Center for Quantum Computing on campus.',
+    emoji:'🏛',
+    tags:['Caltech','IQIM','Preskill','Quantum Error Correction','AWS']
+  },
+  {
+    id:'delft', x:1720, y:1380,
+    type:'ACADEMIA · GLOBAL', color:'green',
+    title:'TU Delft — QuTech',
+    body:'QuTech at TU Delft (Netherlands) is Europe\'s leading quantum institute, a joint venture with TNO. Research spans spin qubits, topological qubits, and the Quantum Internet (QIA project). Home to pioneering teleportation and entanglement distribution experiments. Partners with Microsoft on topological quantum computing.',
+    emoji:'🇳🇱',
+    tags:['QuTech','TU Delft','Europe','Quantum Internet','Spin Qubits']
+  },
+  {
+    id:'national-programs', x:1880, y:1320,
+    type:'GLOBAL — POLICY', color:'green',
+    title:'National Quantum Initiatives',
+    body:'Major government programs: USA National Quantum Initiative Act (2018, $1.2B); EU Quantum Flagship (2018, €1B, 10-year); China National Quantum Lab (Hefei, world\'s largest investment); UK National Quantum Technologies Programme; Germany Quantum Computing Initiative. Romania: emerging interest through EU Flagship membership.',
+    emoji:'🌍',
+    tags:['NQI','EU Flagship','China','UK','Romania','Policy']
+  },
+
+  // ══════════════════════════════════════════
+  // SECTION 9 — HISTORY & ORIGINS
+  // ══════════════════════════════════════════
+  {
+    id:'origins-section', x:1100, y:280,
+    type:'SECTION', color:'purple', size:'section',
+    title:'History & Origins',
+    body:'A chronological journey through milestones.',
+    emoji:'📅', tags:[]
+  },
+  {
+    id:'timeline', x:1100, y:120,
+    type:'TIMELINE', color:'purple',
+    title:'Origins Timeline: 1981–2024',
+    body:'Key milestones: 1981 Feynman proposes quantum simulation → 1985 Deutsch quantum Turing machine → 1994 Shor\'s algorithm → 1996 Grover\'s algorithm → 2001 IBM 7-qubit NMR demo → 2011 D-Wave first commercial QC → 2019 Google quantum supremacy → 2023 IBM Condor 1121 qubits → 2024 Google Willow chip.',
+    emoji:'📅',
+    tags:['History','Milestones','Timeline'],
+  },
+  {
+    id:'y1981', x:860, y:100,
+    type:'MILESTONE · 1981', color:'purple',
+    title:'Feynman Proposes QC — 1981',
+    body:'At a conference at MIT, Richard Feynman proposes that quantum systems can only be efficiently simulated by quantum computers — coining the fundamental motivation for the field.',
+    emoji:'🧪',
+    tags:['Feynman','Quantum Simulation','1981','MIT'],
+  },
+  {
+    id:'y1985', x:980, y:60,
+    type:'MILESTONE · 1985', color:'purple',
+    title:'Deutsch\'s Quantum Turing Machine — 1985',
+    body:'David Deutsch publishes "Quantum theory, the Church-Turing principle and the universal quantum computer" in the Proceedings of the Royal Society. Establishes the theoretical foundation of quantum computation.',
+    emoji:'🔧',
+    tags:['Deutsch','Quantum Turing Machine','1985','Royal Society'],
+  },
+  {
+    id:'y1994', x:1120, y:40,
+    type:'MILESTONE · 1994', color:'purple',
+    title:"Shor's Algorithm — 1994",
+    body:"Peter Shor presents his polynomial-time quantum algorithm for integer factoring at FOCS 1994. Immediately recognized as a threat to RSA cryptography. Ignites massive global interest and government investment in quantum computing.",
+    emoji:'📐',
+    tags:["Shor's Algorithm",'Factoring','1994','FOCS'],
+  },
+  {
+    id:'y2019', x:1260, y:60,
+    type:'MILESTONE · 2019', color:'purple',
+    title:'Google Quantum Supremacy — 2019',
+    body:'Google claims quantum supremacy with Sycamore processor completing a sampling task in 200 seconds that would take Summit supercomputer ~10,000 years. Published in Nature. IBM disputes the claim, asserting classical simulation could do it in 2.5 days. Debate continues.',
+    emoji:'🏆',
+    tags:['Google','Sycamore','Supremacy','Nature','2019'],
+  },
+  {
+    id:'y2024', x:1380, y:100,
+    type:'MILESTONE · 2024', color:'purple',
+    title:'Google Willow — 2024',
+    body:'Google unveils the Willow quantum chip: as qubit count increases, errors decrease exponentially — a hallmark property required for fault-tolerant quantum computing. First experimental demonstration of this threshold behavior. Published in Nature, December 2024.',
+    emoji:'🍃',
+    tags:['Willow','Google','Error Correction','Fault Tolerance','2024'],
+  },
+];
+
+// Connections between nodes [from_id, to_id]
+const connections = [
+  // Hub to sections
+  ['cover','act-section'],['cover','concepts-section'],['cover','connections-section'],
+  ['cover','problems-section'],['cover','people-section'],['cover','venues-section'],
+  ['cover','local-section'],['cover','global-section'],['cover','origins-section'],
+
+  // Activities
+  ['act-section','theory'],['act-section','experiment'],['act-section','design'],
+  ['theory','experiment'],['experiment','design'],['design','theory'],
+
+  // Core concepts
+  ['concepts-section','concepts'],['concepts-section','basics'],
+  ['basics','concepts'],['concepts','theory'],
+
+  // Connections to other CS areas
+  ['connections-section','conn-crypto'],['connections-section','conn-ai'],
+  ['connections-section','conn-complexity'],['connections-section','conn-physics'],
+  ['connections-section','conn-hpc'],['connections-section','conn-optimization'],
+  ['theory','conn-complexity'],['experiment','conn-physics'],['design','conn-optimization'],
+  ['conn-crypto','conn-complexity'],['conn-ai','conn-optimization'],
+
+  // Problems
+  ['problems-section','prob-decoherence'],['problems-section','prob-errorcorr'],
+  ['problems-section','prob-scalability'],['problems-section','prob-bqp'],
+  ['problems-section','prob-supremacy'],['problems-section','prob-simulation'],
+  ['prob-decoherence','prob-errorcorr'],['prob-errorcorr','prob-scalability'],
+  ['prob-bqp','conn-complexity'],['prob-supremacy','prob-bqp'],
+
+  // People
+  ['people-section','feynman'],['people-section','deutsch'],['people-section','shor'],
+  ['people-section','grover'],['people-section','preskill'],['people-section','bennett'],
+  ['people-section','harrow'],
+  ['feynman','y1981'],['deutsch','y1985'],['shor','y1994'],
+  ['shor','conn-crypto'],['bennett','conn-crypto'],['harrow','conn-ai'],
+  ['preskill','prob-errorcorr'],
+
+  // Venues
+  ['venues-section','journal-nature'],['venues-section','journal-prx'],
+  ['venues-section','journal-quantum'],['venues-section','conf-qip'],
+  ['venues-section','conf-ieee-quantum'],['venues-section','conf-stoc'],
+  ['venues-section','conf-isca'],
+  ['conf-stoc','conn-complexity'],['conf-qip','theory'],
+
+  // Local — UVT
+  ['local-section','uvt-overview'],['local-section','uvt-courses'],
+  ['local-section','uvt-research'],['local-section','uvt-collab'],
+  ['uvt-courses','basics'],['uvt-collab','connections-section'],
+
+  // Global
+  ['global-section','ibm'],['global-section','google'],['global-section','ionq'],
+  ['global-section','microsoft'],['global-section','mit'],['global-section','caltech'],
+  ['global-section','delft'],['global-section','national-programs'],
+  ['ibm','experiment'],['google','y2019'],['google','y2024'],
+  ['microsoft','prob-decoherence'],['mit','shor'],['caltech','preskill'],
+
+  // Origins
+  ['origins-section','timeline'],
+  ['timeline','y1981'],['timeline','y1985'],['timeline','y1994'],
+  ['timeline','y2019'],['timeline','y2024'],
+  ['y1981','y1985'],['y1985','y1994'],['y1994','y2019'],['y2019','y2024'],
+];
+
+// ════════════════════════════════════════
+// RENDER
+// ════════════════════════════════════════
+const world = document.getElementById('map-world');
+const svgEl = document.getElementById('connections');
+
+const colorMap = {
+  cyan:'var(--cyan)',purple:'var(--purple)',
+  amber:'var(--amber)',green:'var(--green)'
+};
+
+// World bounds
+let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+nodes.forEach(n=>{
+  minX=Math.min(minX,n.x-120);minY=Math.min(minY,n.y-80);
+  maxX=Math.max(maxX,n.x+220);maxY=Math.max(maxY,n.y+200);
+});
+const worldW=maxX-minX+200, worldH=maxY-minY+200;
+const OFFX=100-minX, OFFY=100-minY;
+
+world.style.width=worldW+'px';
+world.style.height=worldH+'px';
+svgEl.setAttribute('width',worldW);
+svgEl.setAttribute('height',worldH);
+svgEl.setAttribute('viewBox',`0 0 ${worldW} ${worldH}`);
+
+// Build node lookup
+const nodeById={};
+nodes.forEach(n=>nodeById[n.id]=n);
+
+// Draw connections
+connections.forEach(([a,b])=>{
+  const na=nodeById[a],nb=nodeById[b];
+  if(!na||!nb) return;
+  const x1=na.x+OFFX,y1=na.y+OFFY,x2=nb.x+OFFX,y2=nb.y+OFFY;
+  const mx=(x1+x2)/2,my=(y1+y2)/2;
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  const dx=x2-x1,dy=y2-y1;
+  const cx1=x1+dx*0.3,cy1=y1+dy*0.05;
+  const cx2=x2-dx*0.3,cy2=y2-dy*0.05;
+  path.setAttribute('d',`M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`);
+  path.setAttribute('stroke','rgba(0,229,255,0.12)');
+  path.setAttribute('stroke-width','1');
+  path.setAttribute('fill','none');
+  svgEl.appendChild(path);
+});
+
+// Draw nodes
+nodes.forEach((n,i)=>{
+  const el=document.createElement('div');
+  el.className='node';
+  el.style.left=(n.x+OFFX)+'px';
+  el.style.top=(n.y+OFFY)+'px';
+
+  const colorHex={cyan:'#00e5ff',purple:'#b06eff',amber:'#ffb830',green:'#00ff9d'}[n.color];
+
+  const cardClass='node-card'+(n.size==='hub'?' hub':n.size==='section'?' section-node':'')+' '+(n.color!=='cyan'?n.color:'');
+
+  let imgHtml='';
+  if(n.img) imgHtml=`<div class="node-img"><img src="${n.img}" alt="" loading="lazy"></div>`;
+
+  el.innerHTML=`
+    <div class="${cardClass}" style="border-top-color:${colorHex}20;">
+      <div class="node-type" style="color:${colorHex}">${n.type}</div>
+      <div class="node-title">${n.title}</div>
+      <div class="node-body">${n.body.substring(0,90)}${n.body.length>90?'…':''}</div>
+      ${imgHtml}
+    </div>`;
+
+  // Glow dot
+  const dot=document.createElement('div');
+  dot.style.cssText=`position:absolute;width:8px;height:8px;border-radius:50%;background:${colorHex};box-shadow:0 0 8px ${colorHex};top:-4px;left:50%;transform:translateX(-50%);`;
+  el.appendChild(dot);
+
+  el.addEventListener('click',()=>openDetail(i));
+  world.appendChild(el);
+
+  // Mini map dot
+  const md=document.createElement('div');
+  md.className='mini-dot';
+  md.style.background=colorHex;
+  md.id='mini-'+n.id;
+  document.getElementById('minimap').appendChild(md);
+});
+
+// ════════════════════════════════════════
+// PAN & ZOOM
+// ════════════════════════════════════════
+const container=document.getElementById('map-container');
+let scale=0.55, tx=0, ty=0;
+let isDragging=false,startX=0,startY=0,lastTx=0,lastTy=0;
+
+function clampView(){
+  const vw=window.innerWidth,vh=window.innerHeight-60;
+  const scaledW=worldW*scale,scaledH=worldH*scale;
+  const pad=80;
+  tx=Math.min(pad,Math.max(vw-scaledW-pad,tx));
+  ty=Math.min(pad+60,Math.max(vh-scaledH-pad,ty));
+}
+
+function applyTransform(animate){
+  clampView();
+  world.style.transition=animate?'transform 0.4s cubic-bezier(0.4,0,0.2,1)':'none';
+  world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
+  updateMinimap();
+}
+
+function resetView(){
+  const vw=window.innerWidth,vh=window.innerHeight-60;
+  scale=Math.min(0.55,vw/worldW*0.85,vh/worldH*0.85);
+  tx=(vw-worldW*scale)/2;
+  ty=60+(vh-worldH*scale)/2;
+  applyTransform(true);
+}
+
+resetView();
+
+// Drag
+container.addEventListener('mousedown',e=>{
+  if(e.target.closest('.node')) return;
+  isDragging=true;startX=e.clientX-tx;startY=e.clientY-ty;
+  container.style.cursor='grabbing';
+});
+window.addEventListener('mousemove',e=>{
+  if(!isDragging) return;
+  tx=e.clientX-startX;ty=e.clientY-startY;applyTransform(false);
+});
+window.addEventListener('mouseup',()=>{isDragging=false;container.style.cursor='grab';});
+
+// Touch drag
+let lastTouchX=0,lastTouchY=0;
+container.addEventListener('touchstart',e=>{
+  if(e.touches.length===1){
+    lastTouchX=e.touches[0].clientX;lastTouchY=e.touches[0].clientY;
+  }},{passive:true});
+container.addEventListener('touchmove',e=>{
+  if(e.touches.length===1){
+    tx+=e.touches[0].clientX-lastTouchX;ty+=e.touches[0].clientY-lastTouchY;
+    lastTouchX=e.touches[0].clientX;lastTouchY=e.touches[0].clientY;
+    applyTransform(false);
+  }},{passive:true});
+
+// Pinch zoom
+let lastPinchDist=0;
+container.addEventListener('touchstart',e=>{
+  if(e.touches.length===2) lastPinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+},{passive:true});
+container.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    const factor=d/lastPinchDist;lastPinchDist=d;
+    zoomAround((e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2,factor);
+  }},{passive:true});
+
+// Scroll zoom
+container.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const factor=e.deltaY<0?1.1:0.91;
+  zoomAround(e.clientX,e.clientY,factor);
+},{passive:false});
+
+function zoomAround(cx,cy,factor){
+  const newScale=Math.max(0.2,Math.min(2.5,scale*factor));
+  const f=newScale/scale;
+  tx=cx-(cx-tx)*f;ty=cy-(cy-ty)*f;
+  scale=newScale;applyTransform(false);
+}
+function zoomBy(factor){zoomAround(window.innerWidth/2,window.innerHeight/2,factor);}
+
+// Minimap
+function updateMinimap(){
+  const mm=document.getElementById('minimap');
+  const mmW=mm.offsetWidth,mmH=mm.offsetHeight;
+  const sx=mmW/worldW,sy=mmH/worldH;
+  // nodes
+  nodes.forEach(n=>{
+    const md=document.getElementById('mini-'+n.id);
+    if(!md) return;
+    md.style.left=((n.x+OFFX)*sx)+'px';
+    md.style.top=((n.y+OFFY)*sy)+'px';
+  });
+  // viewport indicator
+  const vp=document.getElementById('minimap-viewport');
+  const vw=window.innerWidth,vh=window.innerHeight;
+  const vpX=(-tx/scale)*sx, vpY=(-(ty-60)/scale)*sy;
+  const vpW=(vw/scale)*sx, vpH=(vh/scale)*sy;
+  vp.style.left=Math.max(0,vpX)+'px';
+  vp.style.top=Math.max(0,vpY)+'px';
+  vp.style.width=Math.min(mmW,vpW)+'px';
+  vp.style.height=Math.min(mmH,vpH)+'px';
+}
+
+// Click minimap to navigate
+document.getElementById('minimap').addEventListener('click',e=>{
+  const mm=document.getElementById('minimap');
+  const r=mm.getBoundingClientRect();
+  const rx=(e.clientX-r.left)/mm.offsetWidth;
+  const ry=(e.clientY-r.top)/mm.offsetHeight;
+  tx=window.innerWidth/2-rx*worldW*scale;
+  ty=window.innerHeight/2-ry*worldH*scale;
+  applyTransform(true);
+});
+
+// ════════════════════════════════════════
+// DETAIL PANEL
+// ════════════════════════════════════════
+let currentDetailIdx=-1;
+
+function openDetail(idx){
+  currentDetailIdx=idx;
+  const n=nodes[idx];
+  document.getElementById('detail-type').textContent=n.type;
+  document.getElementById('detail-title').textContent=n.title;
+  document.getElementById('detail-body').textContent=n.body;
+
+  const imgEl=document.getElementById('detail-img');
+  if(n.img) imgEl.innerHTML=`<img src="${n.img}" alt="">`;
+  else imgEl.innerHTML=`<span style="font-size:56px">${n.emoji||'⚛'}</span>`;
+
+  const tagsEl=document.getElementById('detail-tags');
+  tagsEl.innerHTML=n.tags.map(t=>`<span class="tag ${n.color==='purple'?'purple':''}">${t}</span>`).join('');
+
+  document.getElementById('dnav-prev').disabled=idx===0;
+  document.getElementById('dnav-next').disabled=idx===nodes.length-1;
+
+  document.getElementById('detail').classList.add('open');
+
+  // Pan to node
+  const nx=(n.x+OFFX)*scale+tx;
+  const ny=(n.y+OFFY)*scale+ty;
+  const panTargetX=nx-window.innerWidth*0.35;
+  const panTargetY=ny-window.innerHeight*0.45;
+  tx-=(panTargetX-nx+window.innerWidth*0.35-window.innerWidth*0.3);
+  applyTransform(true);
+}
+
+function closeDetail(){
+  document.getElementById('detail').classList.remove('open');
+  currentDetailIdx=-1;
+}
+function detailNav(dir){
+  const next=currentDetailIdx+dir;
+  if(next>=0&&next<nodes.length) openDetail(next);
+}
+
+// Stars
+const starsEl=document.getElementById('stars');
+for(let i=0;i<180;i++){
+  const s=document.createElement('div');s.className='star';
+  const sz=Math.random()*2+0.4;
+  s.style.cssText=`width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${2+Math.random()*5}s;animation-delay:${Math.random()*5}s;`;
+  starsEl.appendChild(s);
+}
+
+window.addEventListener('resize',()=>{resetView();updateMinimap();});
+</script>
+</body>
+</html>
