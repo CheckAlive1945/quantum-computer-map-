@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Computing Map — Thamer Mohamed Sassi</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cyan:#00e5ff;--cyan-dim:rgba(0,229,255,0.13);--cyan-border:rgba(0,229,255,0.35);
+  --purple:#b06eff;--purple-dim:rgba(176,110,255,0.13);--purple-border:rgba(176,110,255,0.35);
+  --amber:#ffb830;--green:#00ff9d;
+  --bg:#03080f;--card:#0a1525;--card2:#0e1e35;
+  --text:#e8f4ff;--muted:#5a7a9a;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'Inter',sans-serif;color:var(--text);}
+
+/* ── STARFIELD ── */
+#stars{position:fixed;inset:0;pointer-events:none;z-index:0;}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--d) ease-in-out infinite alternate;opacity:0.35;}
+@keyframes twinkle{to{opacity:0.9;transform:scale(1.5);}}
+
+/* ── GRID LINES (like a map grid) ── */
+#grid{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,229,255,0.03) 1px,transparent 1px);
+  background-size:80px 80px;
+}
+
+/* ── TOP BAR ── */
+#topbar{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 28px;
+  background:linear-gradient(to bottom,rgba(3,8,15,0.97) 70%,transparent);
+  border-bottom:1px solid rgba(0,229,255,0.08);
+}
+#topbar .logo{font-family:'Orbitron',sans-serif;font-size:14px;color:var(--cyan);letter-spacing:3px;}
+#topbar .meta{font-size:12px;color:var(--muted);letter-spacing:1px;text-align:right;line-height:1.6;}
+#topbar .meta strong{color:var(--text);font-weight:500;}
+
+/* ── HINT ── */
+#hint{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:100;
+  font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;color:var(--muted);
+  background:rgba(3,8,15,0.85);border:1px solid rgba(0,229,255,0.12);
+  padding:8px 20px;border-radius:20px;
+  animation:fadehint 6s ease forwards;
+}
+@keyframes fadehint{0%{opacity:1}70%{opacity:1}100%{opacity:0;pointer-events:none}}
+
+/* ── ZOOM CONTROLS ── */
+#zoom-controls{
+  position:fixed;bottom:24px;right:24px;z-index:100;
+  display:flex;flex-direction:column;gap:6px;
+}
+.zoom-btn{
+  width:36px;height:36px;border-radius:8px;
+  border:1px solid var(--cyan-border);background:rgba(3,8,15,0.9);
+  color:var(--cyan);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Orbitron',sans-serif;
+  transition:background 0.2s;
+}
+.zoom-btn:hover{background:var(--cyan-dim);}
+
+/* ── MINI MAP ── */
+#minimap{
+  position:fixed;bottom:24px;left:24px;z-index:100;
+  width:140px;height:90px;
+  background:rgba(3,8,15,0.9);
+  border:1px solid var(--cyan-border);
+  border-radius:10px;overflow:hidden;
+}
+#minimap-viewport{
+  position:absolute;
+  border:1px solid var(--cyan);
+  background:rgba(0,229,255,0.07);
+  pointer-events:none;
+  transition:all 0.1s;
+}
+.mini-dot{
+  position:absolute;
+  border-radius:50%;
+  background:var(--cyan);
+  opacity:0.5;
+  width:4px;height:4px;
+  transform:translate(-50%,-50%);
+}
+
+/* ── MAP CANVAS ── */
+#map-container{
+  position:fixed;inset:0;z-index:1;
+  overflow:hidden;cursor:grab;
+  touch-action:none;
+}
+#map-container:active{cursor:grabbing;}
+#map-world{
+  position:absolute;
+  transform-origin:0 0;
+  will-change:transform;
+}
+
+/* ── NODE CARDS ── */
+.node{
+  position:absolute;
+  transform:translate(-50%,-50%);
+  cursor:pointer;
+  transition:filter 0.25s;
+}
+.node:hover .node-card{
+  border-color:var(--cyan);
+  box-shadow:0 0 28px rgba(0,229,255,0.25),0 0 0 1px rgba(0,229,255,0.15);
+  transform:scale(1.04);
+}
+.node-card{
+  background:var(--card);
+  border:1px solid rgba(0,229,255,0.2);
+  border-radius:14px;
+  padding:14px 16px;
+  width:200px;
+  transition:all 0.25s;
+  position:relative;
+  overflow:hidden;
+}
+.node-card::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple));
+}
+.node-card.purple::before{background:linear-gradient(90deg,var(--purple),var(--cyan));}
+.node-card.amber::before{background:linear-gradient(90deg,var(--amber),#ff6b35);}
+.node-card.green::before{background:linear-gradient(90deg,var(--green),var(--cyan));}
+
+.node-type{
+  font-family:'Orbitron',sans-serif;
+  font-size:8px;letter-spacing:2px;color:var(--muted);
+  margin-bottom:6px;text-transform:uppercase;
+}
+.node-title{
+  font-family:'Orbitron',sans-serif;
+  font-size:11px;font-weight:700;color:#fff;
+  line-height:1.35;margin-bottom:6px;
+}
+.node-body{
+  font-size:11px;color:var(--muted);line-height:1.55;
+}
+.node-img{
+  width:100%;border-radius:8px;margin-top:10px;
+  aspect-ratio:16/9;object-fit:cover;opacity:0.85;
+  background:var(--card2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;
+}
+.node-img img{width:100%;height:100%;object-fit:cover;border-radius:8px;display:block;}
+
+/* HUB node (large) */
+.node-card.hub{
+  width:240px;padding:18px 20px;
+  border-color:rgba(0,229,255,0.4);
+  box-shadow:0 0 30px rgba(0,229,255,0.1);
+}
+.node-card.hub .node-title{font-size:13px;}
+
+/* section header node */
+.node-card.section-node{
+  width:180px;text-align:center;
+  background:rgba(0,229,255,0.05);
+  border-color:rgba(0,229,255,0.3);
+}
+.node-card.section-node .node-title{font-size:12px;color:var(--cyan);}
+
+/* connector lines */
+#connections{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
+
+/* ── DETAIL PANEL ── */
+#detail{
+  position:fixed;top:60px;right:0;bottom:0;
+  width:380px;z-index:200;
+  background:rgba(5,12,22,0.97);
+  border-left:1px solid var(--cyan-border);
+  transform:translateX(100%);
+  transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);
+  overflow-y:auto;
+  padding:28px 28px 80px;
+}
+#detail.open{transform:translateX(0);}
+#detail-close{
+  position:absolute;top:16px;right:16px;
+  width:32px;height:32px;border-radius:50%;
+  border:1px solid var(--cyan-border);background:var(--cyan-dim);
+  color:var(--cyan);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+#detail-type{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:3px;color:var(--cyan);margin-bottom:10px;}
+#detail-title{font-family:'Orbitron',sans-serif;font-size:20px;color:#fff;line-height:1.3;margin-bottom:14px;}
+#detail-img{width:100%;border-radius:12px;margin-bottom:18px;aspect-ratio:16/9;object-fit:cover;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:48px;}
+#detail-img img{width:100%;height:100%;object-fit:cover;border-radius:12px;}
+#detail-body{font-size:14px;color:var(--muted);line-height:1.75;}
+#detail-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+.tag{padding:5px 12px;border-radius:20px;font-size:11px;border:1px solid var(--cyan-border);color:var(--cyan);background:var(--cyan-dim);}
+.tag.purple{border-color:var(--purple-border);color:var(--purple);background:var(--purple-dim);}
+#detail-nav{display:flex;gap:10px;margin-top:24px;}
+.dnav-btn{flex:1;padding:10px;border-radius:8px;border:1px solid var(--cyan-border);background:var(--cyan-dim);color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;transition:background 0.2s;}
+.dnav-btn:hover{background:rgba(0,229,255,0.25);}
+
+/* ── LEGEND ── */
+#legend{
+  position:fixed;top:70px;left:16px;z-index:100;
+  background:rgba(3,8,15,0.9);border:1px solid rgba(0,229,255,0.1);
+  border-radius:10px;padding:12px 16px;font-size:11px;
+}
+#legend h4{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}
+.leg-item{display:flex;align-items:center;gap:8px;margin-bottom:5px;color:var(--muted);}
+.leg-dot{width:10px;height:10px;border-radius:50%;}
+</style>
+</head>
+<body>
+<div id="stars"></div>
+<div id="grid"></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">⚛ QUANTUM COMPUTING MAP</div>
+  <div class="meta">
+    <strong>Thamer Mohamed Sassi</strong> · AI Group 3 · First Year<br>
+    Dept. of Computer Science · UVT · 2025–2026
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div id="legend">
+  <h4>Map Legend</h4>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--cyan)"></div>Core Concepts</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--purple)"></div>History & People</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--amber)"></div>University & Learning</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Industry & Future</div>
+</div>
+
+<!-- MAP -->
+<div id="map-container">
+  <div id="map-world">
+    <svg id="connections"></svg>
+    <!-- Nodes injected by JS -->
+  </div>
+</div>
+
+<!-- MINI MAP -->
+<div id="minimap"><div id="minimap-viewport"></div></div>
+
+<!-- ZOOM CONTROLS -->
+<div id="zoom-controls">
+  <button class="zoom-btn" onclick="zoomBy(1.25)">+</button>
+  <button class="zoom-btn" onclick="zoomBy(0.8)">−</button>
+  <button class="zoom-btn" onclick="resetView()" title="Reset" style="font-size:13px;letter-spacing:0">⌂</button>
+</div>
+
+<!-- HINT -->
+<div id="hint">🖱 DRAG TO EXPLORE · SCROLL TO ZOOM · CLICK NODES TO INSPECT</div>
+
+<!-- DETAIL PANEL -->
+<div id="detail">
+  <div id="detail-close" onclick="closeDetail()">✕</div>
+  <div id="detail-type"></div>
+  <div id="detail-title"></div>
+  <div id="detail-img"></div>
+  <div id="detail-body"></div>
+  <div id="detail-tags"></div>
+  <div id="detail-nav">
+    <button class="dnav-btn" id="dnav-prev" onclick="detailNav(-1)">← PREV NODE</button>
+    <button class="dnav-btn" id="dnav-next" onclick="detailNav(1)">NEXT NODE →</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// MAP DATA — all 25 Prezi frames as nodes
+// x,y are world-space pixel positions
+// ════════════════════════════════════════════
+const nodes = [
+  {
+    id:'cover', x:900, y:600,
+    type:'OVERVIEW', color:'cyan', size:'hub',
+    title:'Understanding Quantum Computers',
+    body:'A detailed exploration of quantum computing fundamentals, history, key figures, and resources. A Map of Computer Science — Activity 1.',
+    emoji:'⚛',
+    tags:['Quantum Computing','Computer Science','UVT'],
+    img:'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&q=80'
+  },
+  {
+    id:'intro', x:560, y:480,
+    type:'INTRODUCTION', color:'cyan',
+    title:'Introduction to Quantum Computers',
+    body:'Quantum computers represent a revolutionary advance in computational technology, utilizing quantum mechanics to process information in fundamentally different ways. They harness qubits to perform complex calculations enabling breakthroughs in cryptography, drug discovery, and optimization.',
+    emoji:'💻',
+    tags:['Qubits','Quantum Mechanics'],
+    img:'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&q=80'
+  },
+  {
+    id:'basics-section', x:300, y:320,
+    type:'SECTION', color:'cyan', size:'section',
+    title:'Basics of Computing: How It Works',
+    body:'Chapter 1 — The foundation of all computing.',
+    emoji:'🖥',tags:[]
+  },
+  {
+    id:'basics', x:200, y:500,
+    type:'CORE CONCEPT', color:'cyan',
+    title:'Basics of Computing: How It Works',
+    body:'Computing relies on binary systems where data is represented in bits (0s and 1s). Algorithms instruct computers to process data effectively, enabling everything from simple calculations to complex data analysis.',
+    emoji:'⚙️',
+    tags:['Binary','Algorithms','Classical Computing'],
+    img:'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&q=80'
+  },
+  {
+    id:'concepts', x:560, y:750,
+    type:'KEY CONCEPTS', color:'cyan',
+    title:'Key Concepts of Quantum Processes',
+    body:'The four pillars: Qubits (quantum bits that can be 0 and 1 simultaneously), Superposition (existing in multiple states at once), Entanglement (instant correlation between qubits), and Quantum Interference (amplifying correct answers).',
+    emoji:'🔮',
+    tags:['Qubits','Superposition','Entanglement','Interference'],
+  },
+  {
+    id:'origins-section', x:1200, y:300,
+    type:'SECTION', color:'purple', size:'section',
+    title:'The Origins of Quantum Computing',
+    body:'Chapter 2 — A chronological journey through milestones.',
+    emoji:'📅',tags:[]
+  },
+  {
+    id:'timeline', x:1420, y:200,
+    type:'TIMELINE', color:'purple',
+    title:'Origins Timeline: 1981–2000s',
+    body:'A chronological overview of key milestones: 1981 Feynman introduces quantum simulation → 1985 Deutsch proposes quantum Turing machine → 1994 Shor\'s algorithm → 2001 First quantum algorithm demo → 2000s First experimental quantum computers.',
+    emoji:'📅',
+    tags:['History','Milestones','Timeline'],
+  },
+  {
+    id:'y1981', x:1100, y:140,
+    type:'MILESTONE · 1981', color:'purple',
+    title:'Richard Feynman — 1981',
+    body:'Introduces the concept of quantum simulation, suggesting that quantum systems could be simulated on quantum computers, laying a foundation for future research.',
+    emoji:'🧪',
+    tags:['Feynman','Quantum Simulation','1981'],
+  },
+  {
+    id:'y1985', x:1280, y:100,
+    type:'MILESTONE · 1985', color:'purple',
+    title:'David Deutsch — 1985',
+    body:'Proposes the quantum Turing machine, establishing the theoretical framework for quantum computation — a cornerstone of the entire field.',
+    emoji:'🔧',
+    tags:['Deutsch','Quantum Turing Machine','1985'],
+  },
+  {
+    id:'y1994', x:1460, y:80,
+    type:'MILESTONE · 1994', color:'purple',
+    title:'Peter Shor — 1994',
+    body:"Develops Shor's algorithm, demonstrating the potential of quantum computers to factor large numbers exponentially faster than classical computers — igniting global interest.",
+    emoji:'📐',
+    tags:["Shor's Algorithm",'Factoring','1994'],
+  },
+  {
+    id:'y2001', x:1620, y:130,
+    type:'MILESTONE · 2001', color:'purple',
+    title:'First Algorithm Demo — 2001',
+    body:'The first demonstration of a quantum algorithm was performed on a quantum computer, marking a significant step in experimental quantum computing.',
+    emoji:'🏆',
+    tags:['First Demo','Experiment','2001'],
+  },
+  {
+    id:'y2000s', x:1760, y:210,
+    type:'MILESTONE · 2000s', color:'purple',
+    title:'Hardware Breakthroughs — 2000s',
+    body:'Advancements in quantum hardware lead to the development of the first experimental quantum computers, paving the way for practical applications.',
+    emoji:'🔩',
+    tags:['Hardware','Experimental QC','2000s'],
+  },
+  {
+    id:'pioneers-section', x:1550, y:500,
+    type:'SECTION', color:'purple', size:'section',
+    title:'Pioneers in Quantum Computing',
+    body:'Chapter 3 — The key people who shaped the field.',
+    emoji:'👥',tags:[]
+  },
+  {
+    id:'pioneers', x:1750, y:450,
+    type:'PEOPLE', color:'purple',
+    title:'Pioneers in Quantum Computing',
+    body:'Key figures who shaped quantum computing: Alonzo Church (Lambda calculus), Lov Grover (Grover\'s algorithm), John Preskill (coined "quantum supremacy"), Charles Bennett (quantum information theory).',
+    emoji:'🧑‍🔬',
+    tags:['Church','Grover','Preskill','Bennett'],
+  },
+  {
+    id:'church', x:1620, y:620,
+    type:'PIONEER', color:'purple',
+    title:'Alonzo Church',
+    body:'Lambda calculus pioneer who laid the theoretical groundwork for computation and computability theory, directly influencing the foundations that quantum computing builds upon.',
+    emoji:'λ',tags:['Lambda Calculus','Theory']
+  },
+  {
+    id:'grover', x:1800, y:640,
+    type:'PIONEER', color:'purple',
+    title:'Lov Grover',
+    body:"Developed Grover's algorithm — a quantum search algorithm that provides a quadratic speedup over classical search methods, with applications in database search and optimization.",
+    emoji:'🔍',tags:["Grover's Algorithm",'Search']
+  },
+  {
+    id:'preskill', x:1680, y:760,
+    type:'PIONEER', color:'purple',
+    title:'John Preskill',
+    body:'Coined the term "quantum supremacy" and has been instrumental in advancing quantum error correction, quantum information theory, and quantum computing research.',
+    emoji:'🏅',tags:['Quantum Supremacy','Error Correction']
+  },
+  {
+    id:'bennett', x:1880, y:770,
+    type:'PIONEER', color:'purple',
+    title:'Charles Bennett',
+    body:'A key contributor to quantum information theory, including quantum cryptography and quantum teleportation protocols. Pioneer in reversible computing.',
+    emoji:'🔐',tags:['Quantum Cryptography','Teleportation']
+  },
+  {
+    id:'uni-section', x:560, y:1060,
+    type:'SECTION', color:'amber', size:'section',
+    title:'University Modules',
+    body:'Chapter 4 — Starting your academic journey.',
+    emoji:'🎓',tags:[]
+  },
+  {
+    id:'modules', x:400, y:1200,
+    type:'EDUCATION', color:'amber',
+    title:'Starting Your Journey: University Modules',
+    body:'Essential modules: Introduction to Computer Science (programming, algorithms), Computer Architecture (hardware, system design), Quantum Computing Fundamentals (theory, qubits), Advanced Quantum Algorithms (Shor\'s, Grover\'s), Quantum Information Theory.',
+    emoji:'📚',
+    tags:['UVT','Curriculum','Modules'],
+  },
+  {
+    id:'mod1', x:220, y:1080,
+    type:'MODULE', color:'amber',
+    title:'Intro to Computer Science',
+    body:'Basics of programming, algorithms, and problem-solving techniques — the foundational pillar before venturing into quantum computing.',
+    emoji:'💡',tags:['Programming','Algorithms']
+  },
+  {
+    id:'mod2', x:380, y:1060,
+    type:'MODULE', color:'amber',
+    title:'Computer Architecture',
+    body:'Understanding hardware components, system design, and the functioning of computers — bridging physical hardware with software abstractions.',
+    emoji:'🖥',tags:['Hardware','Systems']
+  },
+  {
+    id:'mod3', x:540, y:1260,
+    type:'MODULE', color:'amber',
+    title:'Quantum Computing Fundamentals',
+    body:'Specialized courses covering quantum theory, qubits, and computational models, bridging classical CS with quantum mechanics.',
+    emoji:'🔬',tags:['Qubits','Quantum Theory']
+  },
+  {
+    id:'mod4', x:700, y:1080,
+    type:'MODULE', color:'amber',
+    title:'Advanced Quantum Algorithms',
+    body:"Exploration of quantum algorithms including Shor's and Grover's — demonstrating quantum computers outperforming classical ones in critical tasks.",
+    emoji:'✅',tags:["Shor's",'Grover\'s']
+  },
+  {
+    id:'mod5', x:720, y:1260,
+    type:'MODULE', color:'amber',
+    title:'Quantum Information Theory',
+    body:'Study of the principles of information processing in quantum systems — covering entanglement entropy, quantum channels, and quantum error correction.',
+    emoji:'📈',tags:['Information Theory','Entropy']
+  },
+  {
+    id:'learning-section', x:900, y:1100,
+    type:'SECTION', color:'amber', size:'section',
+    title:'Further Learning Opportunities',
+    body:'Chapter 5 — Grow beyond the classroom.',
+    emoji:'🌐',tags:[]
+  },
+  {
+    id:'learning', x:1060, y:1220,
+    type:'RESOURCES', color:'amber',
+    title:'Further Learning Opportunities',
+    body:'Expand your knowledge through online platforms (Coursera, edX, Udacity), hands-on workshops by universities and tech companies, networking at conferences and forums, and direct contact with professors and researchers.',
+    emoji:'🌐',
+    tags:['Coursera','edX','Conferences','Networking'],
+  },
+  {
+    id:'learn1', x:900, y:1300,
+    type:'LEARNING', color:'amber',
+    title:'Online Courses',
+    body:'Explore structured learning through platforms like Coursera, edX, or Udacity that offer beginner to advanced quantum computing courses.',
+    emoji:'🖥',tags:['Coursera','edX','Udacity']
+  },
+  {
+    id:'learn2', x:1080, y:1360,
+    type:'LEARNING', color:'amber',
+    title:'Workshops and Seminars',
+    body:'Participate in hands-on workshops and seminars organized by universities and tech companies to gain practical insights and experiences.',
+    emoji:'🏛',tags:['Workshops','Hands-on']
+  },
+  {
+    id:'learn3', x:1220, y:1280,
+    type:'LEARNING', color:'amber',
+    title:'Networking Opportunities',
+    body:'Engage with peers and experts by joining quantum computing forums, attending conferences, and connecting through social media professional groups.',
+    emoji:'🔗',tags:['Forums','Conferences','Social']
+  },
+  {
+    id:'learn4', x:1360, y:1180,
+    type:'LEARNING', color:'amber',
+    title:'Contact Experts',
+    body:'Reach out to professors, researchers, and industry professionals to seek mentorship or advice on resources and career paths in quantum computing.',
+    emoji:'👤',tags:['Mentorship','Career']
+  },
+  {
+    id:'current-section', x:1280, y:700,
+    type:'SECTION', color:'green', size:'section',
+    title:'Current State of Quantum Computers',
+    body:'Chapter 6 — Where the field stands today.',
+    emoji:'📡',tags:[]
+  },
+  {
+    id:'current', x:1460, y:840,
+    type:'CURRENT STATE', color:'green',
+    title:'Current State of Quantum Computers',
+    body:'Quantum computers have made significant progress, showcasing capabilities that surpass classical computers in specific tasks. Advancements include improved qubit coherence times, error correction techniques, and quantum algorithms addressing real-world problems.',
+    emoji:'🔭',
+    tags:['Qubit Coherence','Error Correction','Progress'],
+    img:'https://images.unsplash.com/photo-1581093588401-fbb62a02f120?w=600&q=80'
+  },
+  {
+    id:'ibm', x:1300, y:960,
+    type:'INDUSTRY · IBM', color:'green',
+    title:'IBM Quantum',
+    body:'IBM Quantum is a leader in quantum computing, providing access to quantum processors via the cloud. Focused on quantum algorithms for optimization, chemistry, and materials science. IBM Quantum Experience platform enables global collaboration.',
+    emoji:'🔵',
+    tags:['IBM','Cloud Quantum','Qiskit'],
+  },
+  {
+    id:'google', x:1540, y:1000,
+    type:'INDUSTRY · GOOGLE', color:'green',
+    title:'Google Quantum AI',
+    body:'Google Quantum AI is known for groundbreaking quantum supremacy work, focused on creating quantum processors that can solve problems classical computers cannot. Research spans machine learning and AI applications.',
+    emoji:'🟢',
+    tags:['Google','Quantum Supremacy','Sycamore'],
+  },
+];
+
+// Connections between nodes [from_id, to_id]
+const connections = [
+  ['cover','intro'],['cover','basics-section'],['cover','origins-section'],
+  ['cover','current-section'],['cover','uni-section'],
+  ['basics-section','basics'],['basics','concepts'],
+  ['intro','concepts'],['intro','basics'],
+  ['origins-section','timeline'],
+  ['timeline','y1981'],['timeline','y1985'],['timeline','y1994'],['timeline','y2001'],['timeline','y2000s'],
+  ['y1981','y1985'],['y1985','y1994'],['y1994','y2001'],['y2001','y2000s'],
+  ['origins-section','pioneers-section'],
+  ['pioneers-section','pioneers'],
+  ['pioneers','church'],['pioneers','grover'],['pioneers','preskill'],['pioneers','bennett'],
+  ['uni-section','modules'],
+  ['modules','mod1'],['modules','mod2'],['modules','mod3'],['modules','mod4'],['modules','mod5'],
+  ['uni-section','learning-section'],
+  ['learning-section','learning'],
+  ['learning','learn1'],['learning','learn2'],['learning','learn3'],['learning','learn4'],
+  ['current-section','current'],['current','ibm'],['current','google'],
+  ['pioneers-section','current-section'],['uni-section','learning-section'],
+];
+
+// ════════════════════════════════════════
+// RENDER
+// ════════════════════════════════════════
+const world = document.getElementById('map-world');
+const svgEl = document.getElementById('connections');
+
+const colorMap = {
+  cyan:'var(--cyan)',purple:'var(--purple)',
+  amber:'var(--amber)',green:'var(--green)'
+};
+
+// World bounds
+let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+nodes.forEach(n=>{
+  minX=Math.min(minX,n.x-120);minY=Math.min(minY,n.y-80);
+  maxX=Math.max(maxX,n.x+220);maxY=Math.max(maxY,n.y+200);
+});
+const worldW=maxX-minX+200, worldH=maxY-minY+200;
+const OFFX=100-minX, OFFY=100-minY;
+
+world.style.width=worldW+'px';
+world.style.height=worldH+'px';
+svgEl.setAttribute('width',worldW);
+svgEl.setAttribute('height',worldH);
+svgEl.setAttribute('viewBox',`0 0 ${worldW} ${worldH}`);
+
+// Build node lookup
+const nodeById={};
+nodes.forEach(n=>nodeById[n.id]=n);
+
+// Draw connections
+connections.forEach(([a,b])=>{
+  const na=nodeById[a],nb=nodeById[b];
+  if(!na||!nb) return;
+  const x1=na.x+OFFX,y1=na.y+OFFY,x2=nb.x+OFFX,y2=nb.y+OFFY;
+  const mx=(x1+x2)/2,my=(y1+y2)/2;
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  const dx=x2-x1,dy=y2-y1;
+  const cx1=x1+dx*0.3,cy1=y1+dy*0.05;
+  const cx2=x2-dx*0.3,cy2=y2-dy*0.05;
+  path.setAttribute('d',`M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`);
+  path.setAttribute('stroke','rgba(0,229,255,0.12)');
+  path.setAttribute('stroke-width','1');
+  path.setAttribute('fill','none');
+  svgEl.appendChild(path);
+});
+
+// Draw nodes
+nodes.forEach((n,i)=>{
+  const el=document.createElement('div');
+  el.className='node';
+  el.style.left=(n.x+OFFX)+'px';
+  el.style.top=(n.y+OFFY)+'px';
+
+  const colorHex={cyan:'#00e5ff',purple:'#b06eff',amber:'#ffb830',green:'#00ff9d'}[n.color];
+
+  const cardClass='node-card'+(n.size==='hub'?' hub':n.size==='section'?' section-node':'')+' '+(n.color!=='cyan'?n.color:'');
+
+  let imgHtml='';
+  if(n.img) imgHtml=`<div class="node-img"><img src="${n.img}" alt="" loading="lazy"></div>`;
+
+  el.innerHTML=`
+    <div class="${cardClass}" style="border-top-color:${colorHex}20;">
+      <div class="node-type" style="color:${colorHex}">${n.type}</div>
+      <div class="node-title">${n.title}</div>
+      <div class="node-body">${n.body.substring(0,90)}${n.body.length>90?'…':''}</div>
+      ${imgHtml}
+    </div>`;
+
+  // Glow dot
+  const dot=document.createElement('div');
+  dot.style.cssText=`position:absolute;width:8px;height:8px;border-radius:50%;background:${colorHex};box-shadow:0 0 8px ${colorHex};top:-4px;left:50%;transform:translateX(-50%);`;
+  el.appendChild(dot);
+
+  el.addEventListener('click',()=>openDetail(i));
+  world.appendChild(el);
+
+  // Mini map dot
+  const md=document.createElement('div');
+  md.className='mini-dot';
+  md.style.background=colorHex;
+  md.id='mini-'+n.id;
+  document.getElementById('minimap').appendChild(md);
+});
+
+// ════════════════════════════════════════
+// PAN & ZOOM
+// ════════════════════════════════════════
+const container=document.getElementById('map-container');
+let scale=0.55, tx=0, ty=0;
+let isDragging=false,startX=0,startY=0,lastTx=0,lastTy=0;
+
+function clampView(){
+  const vw=window.innerWidth,vh=window.innerHeight-60;
+  const scaledW=worldW*scale,scaledH=worldH*scale;
+  const pad=80;
+  tx=Math.min(pad,Math.max(vw-scaledW-pad,tx));
+  ty=Math.min(pad+60,Math.max(vh-scaledH-pad,ty));
+}
+
+function applyTransform(animate){
+  clampView();
+  world.style.transition=animate?'transform 0.4s cubic-bezier(0.4,0,0.2,1)':'none';
+  world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
+  updateMinimap();
+}
+
+function resetView(){
+  const vw=window.innerWidth,vh=window.innerHeight-60;
+  scale=Math.min(0.55,vw/worldW*0.85,vh/worldH*0.85);
+  tx=(vw-worldW*scale)/2;
+  ty=60+(vh-worldH*scale)/2;
+  applyTransform(true);
+}
+
+resetView();
+
+// Drag
+container.addEventListener('mousedown',e=>{
+  if(e.target.closest('.node')) return;
+  isDragging=true;startX=e.clientX-tx;startY=e.clientY-ty;
+  container.style.cursor='grabbing';
+});
+window.addEventListener('mousemove',e=>{
+  if(!isDragging) return;
+  tx=e.clientX-startX;ty=e.clientY-startY;applyTransform(false);
+});
+window.addEventListener('mouseup',()=>{isDragging=false;container.style.cursor='grab';});
+
+// Touch drag
+let lastTouchX=0,lastTouchY=0;
+container.addEventListener('touchstart',e=>{
+  if(e.touches.length===1){
+    lastTouchX=e.touches[0].clientX;lastTouchY=e.touches[0].clientY;
+  }},{passive:true});
+container.addEventListener('touchmove',e=>{
+  if(e.touches.length===1){
+    tx+=e.touches[0].clientX-lastTouchX;ty+=e.touches[0].clientY-lastTouchY;
+    lastTouchX=e.touches[0].clientX;lastTouchY=e.touches[0].clientY;
+    applyTransform(false);
+  }},{passive:true});
+
+// Pinch zoom
+let lastPinchDist=0;
+container.addEventListener('touchstart',e=>{
+  if(e.touches.length===2) lastPinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+},{passive:true});
+container.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    const factor=d/lastPinchDist;lastPinchDist=d;
+    zoomAround((e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2,factor);
+  }},{passive:true});
+
+// Scroll zoom
+container.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const factor=e.deltaY<0?1.1:0.91;
+  zoomAround(e.clientX,e.clientY,factor);
+},{passive:false});
+
+function zoomAround(cx,cy,factor){
+  const newScale=Math.max(0.2,Math.min(2.5,scale*factor));
+  const f=newScale/scale;
+  tx=cx-(cx-tx)*f;ty=cy-(cy-ty)*f;
+  scale=newScale;applyTransform(false);
+}
+function zoomBy(factor){zoomAround(window.innerWidth/2,window.innerHeight/2,factor);}
+
+// Minimap
+function updateMinimap(){
+  const mm=document.getElementById('minimap');
+  const mmW=mm.offsetWidth,mmH=mm.offsetHeight;
+  const sx=mmW/worldW,sy=mmH/worldH;
+  // nodes
+  nodes.forEach(n=>{
+    const md=document.getElementById('mini-'+n.id);
+    if(!md) return;
+    md.style.left=((n.x+OFFX)*sx)+'px';
+    md.style.top=((n.y+OFFY)*sy)+'px';
+  });
+  // viewport indicator
+  const vp=document.getElementById('minimap-viewport');
+  const vw=window.innerWidth,vh=window.innerHeight;
+  const vpX=(-tx/scale)*sx, vpY=(-(ty-60)/scale)*sy;
+  const vpW=(vw/scale)*sx, vpH=(vh/scale)*sy;
+  vp.style.left=Math.max(0,vpX)+'px';
+  vp.style.top=Math.max(0,vpY)+'px';
+  vp.style.width=Math.min(mmW,vpW)+'px';
+  vp.style.height=Math.min(mmH,vpH)+'px';
+}
+
+// Click minimap to navigate
+document.getElementById('minimap').addEventListener('click',e=>{
+  const mm=document.getElementById('minimap');
+  const r=mm.getBoundingClientRect();
+  const rx=(e.clientX-r.left)/mm.offsetWidth;
+  const ry=(e.clientY-r.top)/mm.offsetHeight;
+  tx=window.innerWidth/2-rx*worldW*scale;
+  ty=window.innerHeight/2-ry*worldH*scale;
+  applyTransform(true);
+});
+
+// ════════════════════════════════════════
+// DETAIL PANEL
+// ════════════════════════════════════════
+let currentDetailIdx=-1;
+
+function openDetail(idx){
+  currentDetailIdx=idx;
+  const n=nodes[idx];
+  document.getElementById('detail-type').textContent=n.type;
+  document.getElementById('detail-title').textContent=n.title;
+  document.getElementById('detail-body').textContent=n.body;
+
+  const imgEl=document.getElementById('detail-img');
+  if(n.img) imgEl.innerHTML=`<img src="${n.img}" alt="">`;
+  else imgEl.innerHTML=`<span style="font-size:56px">${n.emoji||'⚛'}</span>`;
+
+  const tagsEl=document.getElementById('detail-tags');
+  tagsEl.innerHTML=n.tags.map(t=>`<span class="tag ${n.color==='purple'?'purple':''}">${t}</span>`).join('');
+
+  document.getElementById('dnav-prev').disabled=idx===0;
+  document.getElementById('dnav-next').disabled=idx===nodes.length-1;
+
+  document.getElementById('detail').classList.add('open');
+
+  // Pan to node
+  const nx=(n.x+OFFX)*scale+tx;
+  const ny=(n.y+OFFY)*scale+ty;
+  const panTargetX=nx-window.innerWidth*0.35;
+  const panTargetY=ny-window.innerHeight*0.45;
+  tx-=(panTargetX-nx+window.innerWidth*0.35-window.innerWidth*0.3);
+  applyTransform(true);
+}
+
+function closeDetail(){
+  document.getElementById('detail').classList.remove('open');
+  currentDetailIdx=-1;
+}
+function detailNav(dir){
+  const next=currentDetailIdx+dir;
+  if(next>=0&&next<nodes.length) openDetail(next);
+}
+
+// Stars
+const starsEl=document.getElementById('stars');
+for(let i=0;i<180;i++){
+  const s=document.createElement('div');s.className='star';
+  const sz=Math.random()*2+0.4;
+  s.style.cssText=`width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${2+Math.random()*5}s;animation-delay:${Math.random()*5}s;`;
+  starsEl.appendChild(s);
+}
+
+window.addEventListener('resize',()=>{resetView();updateMinimap();});
+</script>
+</body>
+</html>
